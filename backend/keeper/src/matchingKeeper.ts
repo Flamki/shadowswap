@@ -2,19 +2,14 @@ import { Contract, JsonRpcProvider, Wallet } from 'ethers';
 import { config } from './config';
 import { ORDER_BOOK_ABI } from './abis';
 
-type OrderTuple = {
-  encPrice: bigint;
-  encAmount: bigint;
-  encDirection: number;
+type OrderMeta = {
   trader: string;
   tokenA: string;
   tokenB: string;
-  timestamp: bigint;
+  direction: number;
   expiry: bigint;
-  orderId: string;
   active: boolean;
   filled: boolean;
-  partiallyFilled: boolean;
 };
 
 export class MatchingKeeper {
@@ -77,7 +72,7 @@ export class MatchingKeeper {
           continue;
         }
 
-        const maybePair = this.buildPair(orderA, orderB);
+        const maybePair = this.buildPair(activeIds[i], orderA, activeIds[j], orderB);
         if (!maybePair) {
           continue;
         }
@@ -109,7 +104,7 @@ export class MatchingKeeper {
       }
 
       const candidate = await this.getOrder(candidateId);
-      const maybePair = this.buildPair(source, candidate);
+      const maybePair = this.buildPair(orderId, source, candidateId, candidate);
       if (!maybePair) {
         continue;
       }
@@ -139,49 +134,44 @@ export class MatchingKeeper {
     }
   }
 
-  private async getOrder(orderId: string): Promise<OrderTuple> {
-    const order = (await this.orderBook.orders(orderId)) as {
-      encPrice: bigint;
-      encAmount: bigint;
-      encDirection: bigint;
+  private async getOrder(orderId: string): Promise<OrderMeta> {
+    const order = (await this.orderBook.getOrderForMatching(orderId)) as {
       trader: string;
       tokenA: string;
       tokenB: string;
-      timestamp: bigint;
+      direction: bigint;
       expiry: bigint;
-      orderId: string;
       active: boolean;
       filled: boolean;
-      partiallyFilled: boolean;
     };
 
     return {
-      encPrice: order.encPrice,
-      encAmount: order.encAmount,
-      encDirection: Number(order.encDirection),
       trader: order.trader,
       tokenA: order.tokenA,
       tokenB: order.tokenB,
-      timestamp: order.timestamp,
+      direction: Number(order.direction),
       expiry: order.expiry,
-      orderId: order.orderId,
       active: order.active,
       filled: order.filled,
-      partiallyFilled: order.partiallyFilled,
     };
   }
 
-  private buildPair(a: OrderTuple, b: OrderTuple): { buyId: string; sellId: string } | null {
+  private buildPair(
+    orderIdA: string,
+    a: OrderMeta,
+    orderIdB: string,
+    b: OrderMeta
+  ): { buyId: string; sellId: string } | null {
     if (a.tokenA.toLowerCase() !== b.tokenA.toLowerCase()) return null;
     if (a.tokenB.toLowerCase() !== b.tokenB.toLowerCase()) return null;
     if (a.trader.toLowerCase() === b.trader.toLowerCase()) return null;
 
-    if (a.encDirection === 1 && b.encDirection === 0) {
-      return { buyId: a.orderId, sellId: b.orderId };
+    if (a.direction === 1 && b.direction === 0) {
+      return { buyId: orderIdA, sellId: orderIdB };
     }
 
-    if (a.encDirection === 0 && b.encDirection === 1) {
-      return { buyId: b.orderId, sellId: a.orderId };
+    if (a.direction === 0 && b.direction === 1) {
+      return { buyId: orderIdB, sellId: orderIdA };
     }
 
     return null;

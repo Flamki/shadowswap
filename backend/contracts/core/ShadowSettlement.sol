@@ -90,15 +90,15 @@ contract ShadowSettlement is Ownable, ReentrancyGuard {
         uint256 quoteNotionalE8 = (uint256(settlementPrice) * uint256(fillAmount)) / PRICE_DECIMALS;
         uint256 tokenBTransferAmount = quoteNotionalE8 * SCALE_E8_TO_E18;
 
-        vault.transferLocked(matchId, matchResult.sellOrderId, buyer, tokenATransferAmount);
-        vault.transferLocked(matchId, matchResult.buyOrderId, seller, tokenBTransferAmount);
+        vault.releaseOnFill(matchId, matchResult.sellOrderId, buyer, tokenATransferAmount);
+        vault.releaseOnFill(matchId, matchResult.buyOrderId, seller, tokenBTransferAmount);
 
         if (buyFilled) {
-            vault.releaseRemaining(matchResult.buyOrderId, buyer);
+            vault.releaseOnCancel(matchResult.buyOrderId, buyer);
         }
 
         if (sellFilled) {
-            vault.releaseRemaining(matchResult.sellOrderId, seller);
+            vault.releaseOnCancel(matchResult.sellOrderId, seller);
         }
 
         orderBook.markSettlementComplete(matchId, settlementPrice, fillAmount);

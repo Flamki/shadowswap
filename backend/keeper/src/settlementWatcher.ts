@@ -2,14 +2,11 @@ import { Contract, JsonRpcProvider, Wallet } from 'ethers';
 import { config } from './config';
 import { ORDER_BOOK_ABI, SETTLEMENT_ABI } from './abis';
 
-type MatchTuple = {
-  buyOrderId: string;
-  sellOrderId: string;
-  encSettlementPrice: bigint;
-  encFillAmount: bigint;
-  encBuyResidual: bigint;
-  encSellResidual: bigint;
-  timestamp: bigint;
+type MatchForSettlement = {
+  settlementPrice: bigint;
+  fillAmount: bigint;
+  buyResidual: bigint;
+  sellResidual: bigint;
   settled: boolean;
   exists: boolean;
 };
@@ -51,17 +48,17 @@ export class SettlementWatcher {
     this.pendingMatches.add(matchId);
 
     try {
-      const matchData = (await this.orderBook.getMatch(matchId)) as MatchTuple;
+      const matchData = (await this.orderBook.getMatchForSettlement(matchId)) as MatchForSettlement;
       if (!matchData.exists || matchData.settled) {
         return;
       }
 
       const tx = await this.settlement.executeSettlement(
         matchId,
-        Number(matchData.encSettlementPrice),
-        Number(matchData.encFillAmount),
-        Number(matchData.encBuyResidual),
-        Number(matchData.encSellResidual),
+        Number(matchData.settlementPrice),
+        Number(matchData.fillAmount),
+        Number(matchData.buyResidual),
+        Number(matchData.sellResidual),
         { gasLimit: 600_000 }
       );
       const receipt = await tx.wait();

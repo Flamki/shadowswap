@@ -15,9 +15,13 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@fhenixprotocol/contracts": "^0.3.1",
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "@types/node": "^22.14.0",
     "dotenv": "^16.4.7",
+    "fhenix-hardhat-docker": "^0.3.2",
+    "fhenix-hardhat-network": "^0.3.2",
+    "fhenix-hardhat-plugin": "^0.3.2",
     "hardhat": "^2.24.3",
     "solidity-coverage": "^0.8.12",
     "ts-node": "^10.9.2",

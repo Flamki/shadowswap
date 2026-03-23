@@ -1,4 +1,4 @@
-import { ethers } from 'hardhat';
+import hre, { ethers } from 'hardhat';
 
 export const PRICE_DECIMALS = 10n ** 8n;
 
@@ -18,6 +18,7 @@ export async function deployShadowSwapFixture() {
   await settlement.waitForDeployment();
 
   await (await orderBook.setSettlement(await settlement.getAddress())).wait();
+  await (await orderBook.setKeeper(keeper.address)).wait();
   await (await vault.setOrderBook(await orderBook.getAddress())).wait();
   await (await vault.setSettlement(await settlement.getAddress())).wait();
   await (await settlement.setDecryptionOracle(keeper.address)).wait();
@@ -49,7 +50,6 @@ export async function deployShadowSwapFixture() {
 }
 
 export function toE8(value: string): bigint {
-  // Supports up to 8 decimals.
   const [whole, frac = ''] = value.split('.');
   const padded = (frac + '00000000').slice(0, 8);
   return BigInt(whole) * PRICE_DECIMALS + BigInt(padded);
@@ -64,7 +64,16 @@ export function quoteTokenFromPriceAndAmount(priceE8: bigint, amountE8: bigint):
   return quoteE8 * 10n ** 10n;
 }
 
-export async function submitOrder(
+export async function encryptOrderInput(priceE8: bigint, amountE8: bigint, direction: 0 | 1) {
+  const fhenix = (hre as any).fhenixjs;
+  const encPrice = await fhenix.encrypt_uint64(priceE8);
+  const encAmount = await fhenix.encrypt_uint64(amountE8);
+  const encDirection = await fhenix.encrypt_uint8(direction);
+
+  return { encPrice, encAmount, encDirection };
+}
+
+export async function submitEncryptedOrder(
   orderBook: any,
   signer: any,
   params: {
@@ -76,11 +85,48 @@ export async function submitOrder(
     expiry: number;
   }
 ): Promise<string> {
-  const tx = await orderBook
-    .connect(signer)
-    .submitOrder(params.priceE8, params.amountE8, params.direction, params.tokenA, params.tokenB, params.expiry);
+  const { encPrice, encAmount, encDirection } = await encryptOrderInput(
+    params.priceE8,
+    params.amountE8,
+    params.direction
+  );
+
+  const submit = orderBook
+    .connect(signer)['submitOrder((bytes,int32),(bytes,int32),(bytes,int32),address,address,uint256)'];
+
+  const tx = await submit(encPrice, encAmount, encDirection, params.tokenA, params.tokenB, params.expiry);
   const receipt = await tx.wait();
 
+  return extractOrderId(orderBook, receipt);
+}
+
+export async function submitPlainOrder(
+  orderBook: any,
+  signer: any,
+  params: {
+    priceE8: bigint;
+    amountE8: bigint;
+    direction: 0 | 1;
+    tokenA: string;
+    tokenB: string;
+    expiry: number;
+  }
+): Promise<string> {
+  const submit = orderBook.connect(signer)['submitOrder(uint64,uint64,uint8,address,address,uint256)'];
+  const tx = await submit(
+    params.priceE8,
+    params.amountE8,
+    params.direction,
+    params.tokenA,
+    params.tokenB,
+    params.expiry
+  );
+  const receipt = await tx.wait();
+
+  return extractOrderId(orderBook, receipt);
+}
+
+function extractOrderId(orderBook: any, receipt: any): string {
   const event = receipt?.logs
     .map((log: any) => {
       try {
@@ -96,4 +142,22 @@ export async function submitOrder(
   }
 
   return event.args.orderId as string;
+}
+
+export async function getMatchIdFromReceipt(orderBook: any, receipt: any): Promise<string> {
+  const event = receipt?.logs
+    .map((log: any) => {
+      try {
+        return orderBook.interface.parseLog(log);
+      } catch {
+        return null;
+      }
+    })
+    .find((parsed: any) => parsed?.name === 'MatchFound');
+
+  if (!event) {
+    throw new Error('MatchFound event not found');
+  }
+
+  return event.args.matchId as string;
 }

@@ -7,14 +7,14 @@ interface IShadowVault {
         address trader,
         address tokenA,
         address tokenB,
-        uint64 encPrice,
-        uint64 encAmount,
-        uint8 encDirection
+        uint64 priceE8,
+        uint64 amountE8,
+        uint8 direction
     ) external;
 
-    function releaseRemaining(bytes32 orderId, address recipient) external returns (uint256 amount);
+    function releaseOnCancel(bytes32 orderId, address recipient) external returns (uint256 amount);
 
-    function transferLocked(
+    function releaseOnFill(
         bytes32 matchId,
         bytes32 orderId,
         address recipient,

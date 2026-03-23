@@ -15,12 +15,13 @@ describe('FHEMatchLib', function () {
     expect(await harness.select(true, 11, 22)).to.equal(11);
   });
 
-  it('reverts sub on underflow', async function () {
+  it('supports false select branch', async function () {
     const Harness = await ethers.getContractFactory('FHEMatchLibHarness');
     const harness = await Harness.deploy();
     await harness.waitForDeployment();
 
-    await expect(harness.sub(3, 8)).to.be.revertedWith('UNDERFLOW');
+    expect(await harness.select(false, 11, 22)).to.equal(22);
+    expect(await harness.gte(3, 8)).to.equal(false);
   });
 
   it('reverts div by zero', async function () {
@@ -29,5 +30,17 @@ describe('FHEMatchLib', function () {
     await harness.waitForDeployment();
 
     await expect(harness.div(3, 0)).to.be.revertedWith('DIV_BY_ZERO');
+  });
+
+  it('handles large uint64-compatible values', async function () {
+    const Harness = await ethers.getContractFactory('FHEMatchLibHarness');
+    const harness = await Harness.deploy();
+    await harness.waitForDeployment();
+
+    const a = 9_999_999_000_000n;
+    const b = 9_000_000_000_000n;
+
+    expect(await harness.gte(a, b)).to.equal(true);
+    expect(await harness.min(a, b)).to.equal(b);
   });
 });

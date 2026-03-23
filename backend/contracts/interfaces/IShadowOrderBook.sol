@@ -13,8 +13,8 @@ interface IShadowOrderBook {
             address trader,
             address tokenA,
             address tokenB,
-            uint64 encPrice,
-            uint64 encAmount,
+            uint64 priceE8,
+            uint64 amountE8,
             bool active,
             bool filled
         );

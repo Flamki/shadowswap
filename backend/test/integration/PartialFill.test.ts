@@ -1,13 +1,14 @@
 import { expect } from 'chai';
 import { loadFixture, time } from '@nomicfoundation/hardhat-network-helpers';
-import { deployShadowSwapFixture, submitOrder, toE8 } from '../helpers/fixture';
+
+import { deployShadowSwapFixture, getMatchIdFromReceipt, submitPlainOrder, toE8 } from '../helpers/fixture';
 
 describe('PartialFill', function () {
   it('keeps residual BUY order active after partial settlement', async function () {
     const { buyer, seller, keeper, orderBook, settlement, vault, weth, usdc } = await loadFixture(deployShadowSwapFixture);
     const expiry = (await time.latest()) + 3600;
 
-    const buyId = await submitOrder(orderBook, buyer, {
+    const buyId = await submitPlainOrder(orderBook, buyer, {
       priceE8: toE8('2850'),
       amountE8: toE8('2.0'),
       direction: 1,
@@ -16,7 +17,7 @@ describe('PartialFill', function () {
       expiry,
     });
 
-    const sellId = await submitOrder(orderBook, seller, {
+    const sellId = await submitPlainOrder(orderBook, seller, {
       priceE8: toE8('2840'),
       amountE8: toE8('1.0'),
       direction: 0,
@@ -27,44 +28,34 @@ describe('PartialFill', function () {
 
     const tx = await orderBook.tryMatch(buyId, sellId);
     const receipt = await tx.wait();
-    const matchEvent = receipt?.logs
-      .map((log: any) => {
-        try {
-          return orderBook.interface.parseLog(log);
-        } catch {
-          return null;
-        }
-      })
-      .find((log: any) => log?.name === 'MatchFound');
-
-    const matchId = matchEvent.args.matchId;
-    const matchData = await orderBook.getMatch(matchId);
+    const matchId = await getMatchIdFromReceipt(orderBook, receipt);
+    const matchData = await orderBook.connect(keeper).getMatchForSettlement(matchId);
 
     await settlement
       .connect(keeper)
       .executeSettlement(
         matchId,
-        matchData.encSettlementPrice,
-        matchData.encFillAmount,
-        matchData.encBuyResidual,
-        matchData.encSellResidual
+        matchData.settlementPrice,
+        matchData.fillAmount,
+        matchData.buyResidual,
+        matchData.sellResidual
       );
 
-    const buyOrder = await orderBook.orders(buyId);
-    expect(buyOrder.active).to.equal(true);
-    expect(buyOrder.partiallyFilled).to.equal(true);
-    expect(buyOrder.encAmount).to.equal(toE8('1.0'));
+    const [, , , , amountLeft, active, filled] = await orderBook.getOrderForSettlement(buyId);
+    expect(active).to.equal(true);
+    expect(filled).to.equal(false);
+    expect(amountLeft).to.equal(toE8('1.0'));
 
     const buyLock = await vault.lockedFunds(buyId);
     expect(buyLock.active).to.equal(true);
     expect(buyLock.amount).to.be.greaterThan(0);
   });
 
-  it('allows second fill to fully close residual order', async function () {
+  it('allows second fill to fully close residual BUY order', async function () {
     const { buyer, seller, keeper, orderBook, settlement, vault, weth, usdc } = await loadFixture(deployShadowSwapFixture);
     const expiry = (await time.latest()) + 3600;
 
-    const buyId = await submitOrder(orderBook, buyer, {
+    const buyId = await submitPlainOrder(orderBook, buyer, {
       priceE8: toE8('2850'),
       amountE8: toE8('2.0'),
       direction: 1,
@@ -73,7 +64,7 @@ describe('PartialFill', function () {
       expiry,
     });
 
-    const firstSellId = await submitOrder(orderBook, seller, {
+    const firstSellId = await submitPlainOrder(orderBook, seller, {
       priceE8: toE8('2840'),
       amountE8: toE8('1.0'),
       direction: 0,
@@ -84,31 +75,22 @@ describe('PartialFill', function () {
 
     const firstTx = await orderBook.tryMatch(buyId, firstSellId);
     const firstReceipt = await firstTx.wait();
-    const firstMatchEvent = firstReceipt?.logs
-      .map((log: any) => {
-        try {
-          return orderBook.interface.parseLog(log);
-        } catch {
-          return null;
-        }
-      })
-      .find((log: any) => log?.name === 'MatchFound');
-    const firstMatchId = firstMatchEvent.args.matchId;
-    const firstMatch = await orderBook.getMatch(firstMatchId);
+    const firstMatchId = await getMatchIdFromReceipt(orderBook, firstReceipt);
+    const firstMatch = await orderBook.connect(keeper).getMatchForSettlement(firstMatchId);
 
     await settlement
       .connect(keeper)
       .executeSettlement(
         firstMatchId,
-        firstMatch.encSettlementPrice,
-        firstMatch.encFillAmount,
-        firstMatch.encBuyResidual,
-        firstMatch.encSellResidual
+        firstMatch.settlementPrice,
+        firstMatch.fillAmount,
+        firstMatch.buyResidual,
+        firstMatch.sellResidual
       );
 
     await (await weth.mint(seller.address, 10n ** 18n)).wait();
 
-    const secondSellId = await submitOrder(orderBook, seller, {
+    const secondSellId = await submitPlainOrder(orderBook, seller, {
       priceE8: toE8('2845'),
       amountE8: toE8('1.0'),
       direction: 0,
@@ -119,33 +101,110 @@ describe('PartialFill', function () {
 
     const secondTx = await orderBook.tryMatch(buyId, secondSellId);
     const secondReceipt = await secondTx.wait();
-    const secondMatchEvent = secondReceipt?.logs
-      .map((log: any) => {
-        try {
-          return orderBook.interface.parseLog(log);
-        } catch {
-          return null;
-        }
-      })
-      .find((log: any) => log?.name === 'MatchFound');
-    const secondMatchId = secondMatchEvent.args.matchId;
-    const secondMatch = await orderBook.getMatch(secondMatchId);
+    const secondMatchId = await getMatchIdFromReceipt(orderBook, secondReceipt);
+    const secondMatch = await orderBook.connect(keeper).getMatchForSettlement(secondMatchId);
 
     await settlement
       .connect(keeper)
       .executeSettlement(
         secondMatchId,
-        secondMatch.encSettlementPrice,
-        secondMatch.encFillAmount,
-        secondMatch.encBuyResidual,
-        secondMatch.encSellResidual
+        secondMatch.settlementPrice,
+        secondMatch.fillAmount,
+        secondMatch.buyResidual,
+        secondMatch.sellResidual
       );
 
-    const buyOrder = await orderBook.orders(buyId);
-    expect(buyOrder.active).to.equal(false);
-    expect(buyOrder.filled).to.equal(true);
+    const [, , , , , active, filled] = await orderBook.getOrderForSettlement(buyId);
+    expect(active).to.equal(false);
+    expect(filled).to.equal(true);
 
     const buyLock = await vault.lockedFunds(buyId);
     expect(buyLock.active).to.equal(false);
+  });
+
+  it('keeps residual SELL order active when BUY is smaller', async function () {
+    const { buyer, seller, keeper, orderBook, settlement, weth, usdc } = await loadFixture(deployShadowSwapFixture);
+    const expiry = (await time.latest()) + 3600;
+
+    const buyId = await submitPlainOrder(orderBook, buyer, {
+      priceE8: toE8('2850'),
+      amountE8: toE8('1.0'),
+      direction: 1,
+      tokenA: await weth.getAddress(),
+      tokenB: await usdc.getAddress(),
+      expiry,
+    });
+
+    const sellId = await submitPlainOrder(orderBook, seller, {
+      priceE8: toE8('2840'),
+      amountE8: toE8('2.0'),
+      direction: 0,
+      tokenA: await weth.getAddress(),
+      tokenB: await usdc.getAddress(),
+      expiry,
+    });
+
+    const tx = await orderBook.tryMatch(buyId, sellId);
+    const receipt = await tx.wait();
+    const matchId = await getMatchIdFromReceipt(orderBook, receipt);
+    const matchData = await orderBook.connect(keeper).getMatchForSettlement(matchId);
+
+    await settlement
+      .connect(keeper)
+      .executeSettlement(
+        matchId,
+        matchData.settlementPrice,
+        matchData.fillAmount,
+        matchData.buyResidual,
+        matchData.sellResidual
+      );
+
+    const [, , , , , buyActive, buyFilled] = await orderBook.getOrderForSettlement(buyId);
+    const [, , , , sellLeft, sellActive] = await orderBook.getOrderForSettlement(sellId);
+
+    expect(buyActive).to.equal(false);
+    expect(buyFilled).to.equal(true);
+    expect(sellLeft).to.equal(toE8('1.0'));
+    expect(sellActive).to.equal(true);
+  });
+
+  it('settlement emits OrderSettled for partial fills', async function () {
+    const { buyer, seller, keeper, orderBook, settlement, weth, usdc } = await loadFixture(deployShadowSwapFixture);
+    const expiry = (await time.latest()) + 3600;
+
+    const buyId = await submitPlainOrder(orderBook, buyer, {
+      priceE8: toE8('2850'),
+      amountE8: toE8('2.0'),
+      direction: 1,
+      tokenA: await weth.getAddress(),
+      tokenB: await usdc.getAddress(),
+      expiry,
+    });
+
+    const sellId = await submitPlainOrder(orderBook, seller, {
+      priceE8: toE8('2840'),
+      amountE8: toE8('1.0'),
+      direction: 0,
+      tokenA: await weth.getAddress(),
+      tokenB: await usdc.getAddress(),
+      expiry,
+    });
+
+    const tx = await orderBook.tryMatch(buyId, sellId);
+    const receipt = await tx.wait();
+    const matchId = await getMatchIdFromReceipt(orderBook, receipt);
+    const matchData = await orderBook.connect(keeper).getMatchForSettlement(matchId);
+
+    await expect(
+      settlement
+        .connect(keeper)
+        .executeSettlement(
+          matchId,
+          matchData.settlementPrice,
+          matchData.fillAmount,
+          matchData.buyResidual,
+          matchData.sellResidual
+        )
+    ).to.emit(orderBook, 'OrderSettled');
   });
 });
