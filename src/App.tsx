@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Shield, Lock, Eye, Zap, ChevronDown, Info, AlertTriangle, CheckCircle2, Clock, Activity, Code, Cpu, Layers, BarChart3, Terminal } from 'lucide-react';
+import type { JsonRpcSigner } from 'ethers';
 import { ThreeScene } from './components/ThreeScene';
 import { EncryptedValue } from './components/EncryptedValue';
 import { Header } from './components/Header';
@@ -8,6 +9,11 @@ import { Sidebar } from './components/Sidebar';
 import { AuthModal } from './components/AuthModal';
 import { OrderConfirmationModal } from './components/OrderConfirmationModal';
 import { cn } from './lib/utils';
+import { buildArbiscanTxUrl } from './lib/contracts';
+import { truncateAddress } from './lib/precision';
+import { useWallet } from './hooks/useWallet';
+import { useSubmitOrder } from './hooks/useSubmitOrder';
+import { useActivityFeed } from './hooks/useActivityFeed';
 
 const PortfolioPage = lazy(async () => {
   const module = await import('./components/PortfolioPage');
@@ -26,9 +32,9 @@ const HowItWorksPage = lazy(async () => {
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('landing');
-  const [walletConnected, setWalletConnected] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [revealedItems, setRevealedItems] = useState<Record<string, boolean>>({});
+  const wallet = useWallet();
 
   useEffect(() => {
     if (currentPage !== 'landing') {
@@ -79,8 +85,8 @@ export default function App() {
     setRevealedItems(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleAuthSuccess = () => {
-    setWalletConnected(true);
+  const handleAuthSuccess = async () => {
+    await wallet.connect();
     if (currentPage === 'landing') {
       setCurrentPage('trade');
     }
@@ -100,7 +106,8 @@ export default function App() {
           currentPage={currentPage} 
           onPageChange={setCurrentPage} 
           onAuthClick={() => setIsAuthModalOpen(true)}
-          isLoggedIn={walletConnected}
+          isLoggedIn={Boolean(wallet.account)}
+          account={wallet.account}
         />
 
         <main className="relative z-10">
@@ -120,7 +127,12 @@ export default function App() {
           {currentPage === 'trade' && (
             <TradePage 
               revealedItems={revealedItems} 
-              onToggleReveal={toggleReveal} 
+              onToggleReveal={toggleReveal}
+              walletAccount={wallet.account}
+              walletSigner={wallet.signer}
+              walletConnecting={wallet.connecting}
+              walletError={wallet.error}
+              onConnectWallet={wallet.connect}
             />
           )}
           {currentPage === 'portfolio' && (
@@ -904,28 +916,57 @@ function LandingPage({ onStart, onHowItWorks }: { onStart: () => void, onHowItWo
   );
 }
 
-function TradePage({ revealedItems, onToggleReveal }: { 
+function TradePage({
+  revealedItems,
+  onToggleReveal,
+  walletAccount,
+  walletSigner,
+  walletConnecting,
+  walletError,
+  onConnectWallet,
+}: {
   revealedItems: Record<string, boolean>, 
-  onToggleReveal: (id: string) => void
+  onToggleReveal: (id: string) => void,
+  walletAccount: string | null,
+  walletSigner: JsonRpcSigner | null,
+  walletConnecting: boolean,
+  walletError: string | null,
+  onConnectWallet: () => Promise<void>,
 }) {
   const [activeTab, setActiveTab] = useState<'buy' | 'sell'>('buy');
   const [amount, setAmount] = useState('');
   const [price, setPrice] = useState('2847.50');
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const activityFeed = useActivityFeed();
+  const { submitOrder, submitState, submitError, txHash, lastOrderId, reset } = useSubmitOrder({
+    signer: walletSigner,
+    account: walletAccount,
+  });
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
       // Simple validation
       return;
     }
+    if (!walletSigner) {
+      await onConnectWallet();
+      return;
+    }
+    reset();
     setIsConfirmModalOpen(true);
   };
 
-  const handleConfirmOrder = () => {
-    console.log('Order confirmed:', { side: activeTab, amount, price });
-    setIsConfirmModalOpen(false);
-    setAmount('');
-    // You could add a success toast here
+  const handleConfirmOrder = async () => {
+    const result = await submitOrder({
+      side: activeTab,
+      amount,
+      price,
+    });
+
+    if (result) {
+      setIsConfirmModalOpen(false);
+      setAmount('');
+    }
   };
 
   return (
@@ -966,6 +1007,12 @@ function TradePage({ revealedItems, onToggleReveal }: {
             <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-teal-500" />
             <span className="font-display text-[9px] font-bold text-teal-500 uppercase tracking-widest">Network Healthy</span>
           </div>
+          <button
+            onClick={() => void onConnectWallet()}
+            className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[9px] font-black uppercase tracking-widest text-white transition-colors hover:bg-white/[0.08]"
+          >
+            {walletAccount ? truncateAddress(walletAccount) : walletConnecting ? 'Connecting...' : 'Connect Wallet'}
+          </button>
         </div>
       </div>
 
@@ -1070,6 +1117,35 @@ function TradePage({ revealedItems, onToggleReveal }: {
                 <p className="text-center mt-6 text-[9px] text-text-4 font-black uppercase tracking-[0.2em] leading-relaxed opacity-60">
                   Orders are encrypted locally<br />and matched on-chain via FHE.
                 </p>
+                {submitState !== 'idle' && (
+                  <p className="mt-4 text-center text-[9px] font-black uppercase tracking-[0.2em] text-teal-500/80">
+                    {submitState === 'approving' && 'Approving Token Spend...'}
+                    {submitState === 'submitting' && 'Submitting Order On-Chain...'}
+                    {submitState === 'success' && 'Order Submitted Successfully'}
+                    {submitState === 'error' && 'Order Submission Failed'}
+                  </p>
+                )}
+                {submitError && (
+                  <p className="mt-3 text-center text-[10px] font-bold text-orange-500">{submitError}</p>
+                )}
+                {walletError && !submitError && (
+                  <p className="mt-3 text-center text-[10px] font-bold text-orange-500">{walletError}</p>
+                )}
+                {txHash && (
+                  <a
+                    href={buildArbiscanTxUrl(txHash)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-3 block text-center text-[10px] font-black uppercase tracking-[0.2em] text-teal-500 hover:text-teal-400"
+                  >
+                    View Transaction
+                  </a>
+                )}
+                {lastOrderId && (
+                  <p className="mt-2 text-center text-[9px] font-mono text-text-3">
+                    Order ID: {lastOrderId.slice(0, 10)}...{lastOrderId.slice(-6)}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -1091,51 +1167,78 @@ function TradePage({ revealedItems, onToggleReveal }: {
             </div>
             
             <div className="p-8 space-y-6 lg:flex-1 lg:overflow-y-auto">
-              {[
-                { id: '1', type: 'match', pair: 'WETH/USDC', amount: '4.2', price: '2847.50', time: '2s ago', status: 'MATCHED' },
-                { id: '2', type: 'submit', pair: 'WETH/USDC', amount: '12.0', price: '2846.80', time: '14s ago', status: 'PENDING' },
-                { id: '3', type: 'match', pair: 'WETH/USDC', amount: '0.85', price: '2847.10', time: '28s ago', status: 'MATCHED' },
-                { id: '4', type: 'submit', pair: 'WETH/USDC', amount: '1.5', price: '2848.00', time: '1m ago', status: 'PENDING' },
-                { id: '5', type: 'match', pair: 'WETH/USDC', amount: '25.0', price: '2847.50', time: '2m ago', status: 'MATCHED' },
-              ].map((item) => (
-                <div key={item.id} className="group relative p-6 rounded-[1.5rem] border border-white/[0.03] bg-white/[0.01] hover:border-teal-500/20 transition-all duration-500">
-                  <div className="flex justify-between items-start mb-6">
-                    <div className="flex items-center gap-4">
-                      <div className={cn(
-                        "h-2 w-2 rounded-full",
-                        item.type === 'match' ? "bg-teal-500 shadow-[0_0_10px_rgba(31,214,200,0.5)]" : "bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.5)]"
-                      )} />
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white">{item.type === 'match' ? 'Order Matched' : 'Order Submitted'}</span>
-                      <span className="text-[9px] text-text-4 font-mono font-black uppercase tracking-widest">{item.time}</span>
-                    </div>
-                    <div className={cn(
-                      "px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border",
-                      item.status === 'MATCHED' ? "bg-teal-500/10 text-teal-500 border-teal-500/20" : "bg-orange-500/10 text-orange-500 border-orange-500/20"
-                    )}>
-                      {item.status}
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-3 gap-8">
-                    <div className="space-y-2">
-                      <span className="text-[9px] uppercase text-text-4 font-black tracking-[0.2em]">Amount</span>
-                      <EncryptedValue value={item.amount} revealed={revealedItems[`feed-amt-${item.id}`]} unit="WETH" />
-                    </div>
-                    <div className="space-y-2">
-                      <span className="text-[9px] uppercase text-text-4 font-black tracking-[0.2em]">Price</span>
-                      <EncryptedValue value={item.price} revealed={revealedItems[`feed-prc-${item.id}`]} unit="USDC" />
-                    </div>
-                    <div className="flex items-end justify-end">
-                      <button 
-                        onClick={() => onToggleReveal(`feed-amt-${item.id}`)}
-                        className="text-[9px] text-teal-500 hover:text-teal-400 font-black uppercase tracking-widest transition-colors border-b border-teal-500/20 pb-0.5"
-                      >
-                        {revealedItems[`feed-amt-${item.id}`] ? 'Hide' : 'Reveal'}
-                      </button>
-                    </div>
-                  </div>
+              {activityFeed.length === 0 && (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 text-center text-[10px] font-black uppercase tracking-[0.25em] text-text-3">
+                  No On-Chain Activity Yet
                 </div>
-              ))}
+              )}
+              {activityFeed.map((item) => {
+                const isMatchEvent = item.type === 'matched' || item.type === 'settled';
+                const eventLabel =
+                  item.type === 'submitted'
+                    ? 'Order Submitted'
+                    : item.type === 'matched'
+                      ? 'Match Found'
+                      : item.type === 'settled'
+                        ? 'Order Settled'
+                        : item.type === 'cancelled'
+                          ? 'Order Cancelled'
+                          : 'Order Expired';
+                const eventTime = new Date(item.timestamp * 1000).toLocaleTimeString();
+
+                return (
+                  <div
+                    key={`${item.type}-${item.id}`}
+                    className="group relative rounded-[1.5rem] border border-white/[0.03] bg-white/[0.01] p-6 transition-all duration-500 hover:border-teal-500/20"
+                  >
+                    <div className="mb-5 flex items-start justify-between">
+                      <div className="flex items-center gap-4">
+                        <div
+                          className={cn(
+                            'h-2 w-2 rounded-full',
+                            isMatchEvent
+                              ? 'bg-teal-500 shadow-[0_0_10px_rgba(31,214,200,0.5)]'
+                              : 'bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.5)]',
+                          )}
+                        />
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white">{eventLabel}</span>
+                        <span className="text-[9px] font-mono font-black uppercase tracking-widest text-text-4">{eventTime}</span>
+                      </div>
+                      <div
+                        className={cn(
+                          'rounded-full border px-3 py-1 text-[8px] font-black uppercase tracking-widest',
+                          isMatchEvent
+                            ? 'border-teal-500/20 bg-teal-500/10 text-teal-500'
+                            : 'border-orange-500/20 bg-orange-500/10 text-orange-500',
+                        )}
+                      >
+                        {item.type.toUpperCase()}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-6">
+                      <div className="space-y-2">
+                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-text-4">Pair</span>
+                        <p className="text-xs font-black text-white">{item.pair}</p>
+                      </div>
+                      <div className="space-y-2">
+                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-text-4">Event ID</span>
+                        <p className="font-mono text-[10px] text-text-2">
+                          {item.id.slice(0, 10)}...{item.id.slice(-6)}
+                        </p>
+                      </div>
+                      <div className="flex items-end justify-end">
+                        <button
+                          onClick={() => onToggleReveal(`feed-${item.type}-${item.id}`)}
+                          className="border-b border-teal-500/20 pb-0.5 text-[9px] font-black uppercase tracking-widest text-teal-500 transition-colors hover:text-teal-400"
+                        >
+                          {revealedItems[`feed-${item.type}-${item.id}`] ? 'Hide' : 'Reveal'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -1261,6 +1364,7 @@ function TradePage({ revealedItems, onToggleReveal }: {
         isOpen={isConfirmModalOpen}
         onClose={() => setIsConfirmModalOpen(false)}
         onConfirm={handleConfirmOrder}
+        isProcessing={submitState === 'approving' || submitState === 'submitting'}
         orderData={{
           side: activeTab,
           amount,

@@ -7,7 +7,8 @@ import { EncryptedValue } from './EncryptedValue';
 interface OrderConfirmationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
+  isProcessing?: boolean;
   orderData: {
     side: 'buy' | 'sell';
     amount: string;
@@ -16,7 +17,7 @@ interface OrderConfirmationModalProps {
   };
 }
 
-export function OrderConfirmationModal({ isOpen, onClose, onConfirm, orderData }: OrderConfirmationModalProps) {
+export function OrderConfirmationModal({ isOpen, onClose, onConfirm, isProcessing = false, orderData }: OrderConfirmationModalProps) {
   return (
     <AnimatePresence>
       {isOpen && (
@@ -120,16 +121,17 @@ export function OrderConfirmationModal({ isOpen, onClose, onConfirm, orderData }
                 </button>
                 <button 
                   onClick={onConfirm}
+                  disabled={isProcessing}
                   className={cn(
-                    "flex-[2] py-5 rounded-2xl font-display text-[10px] font-black uppercase tracking-[0.3em] transition-all duration-500 relative overflow-hidden group/btn",
+                    "flex-[2] py-5 rounded-2xl font-display text-[10px] font-black uppercase tracking-[0.3em] transition-all duration-500 relative overflow-hidden group/btn disabled:cursor-not-allowed disabled:opacity-60",
                     orderData.side === 'buy' 
                       ? "bg-white text-bg-void shadow-[0_0_30px_rgba(255,255,255,0.1)] hover:shadow-[0_0_50px_rgba(255,255,255,0.2)]" 
                       : "bg-orange-500 text-white shadow-[0_0_30_rgba(249,115,22,0.2)] hover:shadow-[0_0_50px_rgba(249,115,22,0.3)]"
                   )}
                 >
                   <div className="relative z-10 flex items-center justify-center gap-2">
-                    Confirm {orderData.side}
-                    <ArrowRight size={14} />
+                    {isProcessing ? 'Submitting...' : `Confirm ${orderData.side}`}
+                    {!isProcessing && <ArrowRight size={14} />}
                   </div>
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full group-hover/btn:animate-shimmer" />
                 </button>

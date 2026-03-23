@@ -1,0 +1,9 @@
+{
+  "network": "arbitrumSepolia",
+  "chainId": 421614,
+  "shadowOrderBook": "0x0000000000000000000000000000000000000000",
+  "shadowVault": "0x0000000000000000000000000000000000000000",
+  "shadowSettlement": "0x0000000000000000000000000000000000000000",
+  "deployedAt": "",
+  "deployer": ""
+}

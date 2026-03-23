@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Wallet, Activity, PieChart, Info, ChevronRight, Circle, Cpu, Globe, Zap } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { truncateAddress } from '../lib/precision';
 
 interface HeaderProps {
   currentPage: string;
   onPageChange: (page: string) => void;
   onAuthClick: () => void;
   isLoggedIn: boolean;
+  account?: string | null;
 }
 
-export function Header({ currentPage, onPageChange, onAuthClick, isLoggedIn }: HeaderProps) {
+export function Header({ currentPage, onPageChange, onAuthClick, isLoggedIn, account }: HeaderProps) {
   const [scrollY, setScrollY] = useState(0);
 
   useEffect(() => {
@@ -86,7 +88,7 @@ export function Header({ currentPage, onPageChange, onAuthClick, isLoggedIn }: H
                 )}
               >
                 <Wallet size={14} className={cn("transition-transform group-hover:rotate-12", isLoggedIn ? "text-teal-500" : "text-teal-500")} />
-                {isLoggedIn ? '0x71C...3921' : 'Connect Wallet'}
+                {isLoggedIn ? truncateAddress(account) : 'Connect Wallet'}
               </button>
             )}
           </div>

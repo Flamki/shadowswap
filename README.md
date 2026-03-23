@@ -61,3 +61,19 @@ Backend quick start:
 3. `cp .env.example .env`
 4. `npm run compile`
 5. `npm run test`
+
+## Frontend Contract Wiring
+
+The frontend now submits orders directly to `ShadowOrderBook` and listens to live events.
+
+- Contract config source order:
+  1. `VITE_*` env values
+  2. [backend/deployments/arbitrumSepolia.json](C:/Users/bbook/Desktop/shadowswap/backend/deployments/arbitrumSepolia.json)
+- Set these in `.env.local` (or update the deployment JSON after backend deploy):
+  - `VITE_ORDER_BOOK_ADDRESS`
+  - `VITE_VAULT_ADDRESS`
+  - `VITE_SETTLEMENT_ADDRESS`
+  - `VITE_CHAIN_ID`
+  - `VITE_RPC_URL`
+
+After backend deployment, sync addresses by updating `backend/deployments/arbitrumSepolia.json` or `.env.local`.
