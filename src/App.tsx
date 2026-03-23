@@ -933,7 +933,7 @@ function TradePage({ revealedItems, onToggleReveal }: {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="relative min-h-[calc(100dvh-5rem)] lg:h-[calc(100dvh-5rem)] flex flex-col grainy-bg overflow-y-auto lg:overflow-hidden"
+      className="relative min-h-[calc(100dvh-5rem)] flex flex-col grainy-bg overflow-y-auto"
     >
       <div className="absolute inset-0 z-0 opacity-20 pointer-events-none">
         <ThreeScene type="ambient" />
@@ -970,11 +970,11 @@ function TradePage({ revealedItems, onToggleReveal }: {
       </div>
 
       {/* Main Grid */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 relative z-10">
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 relative z-10">
         
         {/* Left: Order Form */}
-        <div className="lg:col-span-3 h-full flex flex-col overflow-hidden">
-          <div className="premium-card p-8 flex-1 flex flex-col gap-8 overflow-y-auto">
+        <div className="lg:col-span-3 flex flex-col lg:h-full">
+          <div className="premium-card p-8 flex flex-col gap-8 lg:flex-1 lg:overflow-y-auto">
             <div className="flex items-center justify-between shrink-0">
               <h3 className="font-display text-[10px] font-black uppercase tracking-[0.3em] text-text-3">Order Terminal</h3>
               <div className="flex gap-2">
@@ -1076,8 +1076,8 @@ function TradePage({ revealedItems, onToggleReveal }: {
         </div>
 
         {/* Center: Market Feed */}
-        <div className="lg:col-span-6 h-full flex flex-col overflow-hidden">
-          <div className="premium-card flex-1 flex flex-col overflow-hidden">
+        <div className="lg:col-span-6 flex flex-col lg:h-full">
+          <div className="premium-card flex flex-col lg:flex-1 lg:overflow-hidden">
             <div className="p-8 border-b border-white/5 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-4">
                 <h3 className="font-display text-[10px] font-black uppercase tracking-[0.3em] text-text-3">Encrypted Market Feed</h3>
@@ -1090,7 +1090,7 @@ function TradePage({ revealedItems, onToggleReveal }: {
               </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-8 space-y-6">
+            <div className="p-8 space-y-6 lg:flex-1 lg:overflow-y-auto">
               {[
                 { id: '1', type: 'match', pair: 'WETH/USDC', amount: '4.2', price: '2847.50', time: '2s ago', status: 'MATCHED' },
                 { id: '2', type: 'submit', pair: 'WETH/USDC', amount: '12.0', price: '2846.80', time: '14s ago', status: 'PENDING' },
@@ -1141,8 +1141,8 @@ function TradePage({ revealedItems, onToggleReveal }: {
         </div>
 
         {/* Right: My Orders */}
-        <div className="lg:col-span-3 h-full flex flex-col overflow-hidden">
-          <div className="premium-card flex-1 flex flex-col overflow-hidden">
+        <div className="lg:col-span-3 flex flex-col lg:h-full">
+          <div className="premium-card flex flex-col lg:flex-1 lg:overflow-hidden">
             <div className="p-8 border-b border-white/5 flex items-center justify-between shrink-0">
               <h3 className="font-display text-[10px] font-black uppercase tracking-[0.3em] text-text-3">My Orders</h3>
               <div className="flex gap-6 text-[9px] font-black uppercase tracking-widest">
@@ -1151,7 +1151,7 @@ function TradePage({ revealedItems, onToggleReveal }: {
               </div>
             </div>
 
-            <div className="flex-1 p-8 space-y-8 overflow-y-auto">
+            <div className="p-8 space-y-8 lg:flex-1 lg:overflow-y-auto">
               <div className="p-8 rounded-[2rem] border border-teal-500/20 bg-teal-500/5 shadow-[0_0_30px_rgba(31,214,200,0.05)] relative overflow-hidden group">
                 <div className="absolute inset-0 bg-grid-pattern opacity-5" />
                 <div className="relative z-10">
