@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Shield, Lock, Eye, Zap, ChevronDown, Info, AlertTriangle, CheckCircle2, Clock, Activity, Code, Cpu, Layers, BarChart3, Terminal } from 'lucide-react';
 import { ThreeScene } from './components/ThreeScene';
@@ -9,9 +9,20 @@ import { AuthModal } from './components/AuthModal';
 import { OrderConfirmationModal } from './components/OrderConfirmationModal';
 import { cn } from './lib/utils';
 
-import { PortfolioPage } from './components/PortfolioPage';
-import { AnalyticsPage } from './components/AnalyticsPage';
-import { HowItWorksPage } from './components/HowItWorksPage';
+const PortfolioPage = lazy(async () => {
+  const module = await import('./components/PortfolioPage');
+  return { default: module.PortfolioPage };
+});
+
+const AnalyticsPage = lazy(async () => {
+  const module = await import('./components/AnalyticsPage');
+  return { default: module.AnalyticsPage };
+});
+
+const HowItWorksPage = lazy(async () => {
+  const module = await import('./components/HowItWorksPage');
+  return { default: module.HowItWorksPage };
+});
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('landing');
@@ -20,20 +31,49 @@ export default function App() {
   const [revealedItems, setRevealedItems] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      const cards = document.querySelectorAll('.premium-card');
-      cards.forEach((card) => {
-        const rect = (card as HTMLElement).getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        (card as HTMLElement).style.setProperty('--mouse-x', `${x}px`);
-        (card as HTMLElement).style.setProperty('--mouse-y', `${y}px`);
-      });
+    if (currentPage !== 'landing') {
+      return;
+    }
+
+    let frameId: number | null = null;
+    let lastEvent: PointerEvent | null = null;
+
+    const updateHoveredCard = () => {
+      frameId = null;
+      if (!lastEvent) {
+        return;
+      }
+
+      const hovered = (lastEvent.target as HTMLElement | null)?.closest('.premium-card') as HTMLElement | null;
+      if (!hovered) {
+        return;
+      }
+
+      const rect = hovered.getBoundingClientRect();
+      const x = lastEvent.clientX - rect.left;
+      const y = lastEvent.clientY - rect.top;
+
+      hovered.style.setProperty('--mouse-x', `${x}px`);
+      hovered.style.setProperty('--mouse-y', `${y}px`);
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
+    const handlePointerMove = (event: PointerEvent) => {
+      lastEvent = event;
+      if (frameId !== null) {
+        return;
+      }
+      frameId = requestAnimationFrame(updateHoveredCard);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
+    };
+  }, [currentPage]);
 
   const toggleReveal = (id: string) => {
     setRevealedItems(prev => ({ ...prev, [id]: !prev[id] }));
@@ -84,16 +124,22 @@ export default function App() {
             />
           )}
           {currentPage === 'portfolio' && (
-            <PortfolioPage 
-              revealedItems={revealedItems} 
-              onToggleReveal={toggleReveal} 
-            />
+            <Suspense fallback={<PageLoadingFallback />}>
+              <PortfolioPage 
+                revealedItems={revealedItems} 
+                onToggleReveal={toggleReveal} 
+              />
+            </Suspense>
           )}
           {currentPage === 'analytics' && (
-            <AnalyticsPage />
+            <Suspense fallback={<PageLoadingFallback />}>
+              <AnalyticsPage />
+            </Suspense>
           )}
           {currentPage === 'how-it-works' && (
-            <HowItWorksPage onStart={() => setIsAuthModalOpen(true)} />
+            <Suspense fallback={<PageLoadingFallback />}>
+              <HowItWorksPage onStart={() => setIsAuthModalOpen(true)} />
+            </Suspense>
           )}
         </AnimatePresence>
       </main>
@@ -108,6 +154,16 @@ export default function App() {
   );
 }
 
+function PageLoadingFallback() {
+  return (
+    <div className="min-h-[40vh] flex items-center justify-center px-6">
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-4 text-[10px] font-black uppercase tracking-[0.25em] text-text-3">
+        Loading Interface...
+      </div>
+    </div>
+  );
+}
+
 function LandingPage({ onStart, onHowItWorks }: { onStart: () => void, onHowItWorks: () => void }) {
   return (
     <motion.div 
@@ -117,7 +173,7 @@ function LandingPage({ onStart, onHowItWorks }: { onStart: () => void, onHowItWo
       className="relative grainy-bg"
     >
       {/* Hero Section */}
-      <section className="relative min-h-screen flex flex-col items-center justify-start pt-32 md:pt-48 px-6 md:px-12 overflow-hidden">
+      <section className="landing-section relative min-h-screen flex flex-col items-center justify-start pt-32 md:pt-48 px-6 md:px-12 overflow-hidden">
         {/* Background Layers */}
         <div className="absolute inset-0 z-0">
           <ThreeScene type="hero" opacity={0.5} />
@@ -237,7 +293,7 @@ function LandingPage({ onStart, onHowItWorks }: { onStart: () => void, onHowItWo
       </section>
 
       {/* Stats / Proof Section */}
-      <section className="py-32 px-4 relative">
+      <section className="landing-section py-32 px-4 relative">
         <div className="mx-auto max-w-7xl">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
             {[
@@ -268,7 +324,7 @@ function LandingPage({ onStart, onHowItWorks }: { onStart: () => void, onHowItWo
       </section>
 
       {/* The Invisible Engine - 3D Section */}
-      <section className="py-48 px-4 relative overflow-hidden bg-bg-deep">
+      <section className="landing-section py-48 px-4 relative overflow-hidden bg-bg-deep">
         <div className="absolute inset-0 z-0">
           <ThreeScene type="mempool" opacity={0.4} />
         </div>
@@ -335,7 +391,7 @@ function LandingPage({ onStart, onHowItWorks }: { onStart: () => void, onHowItWo
       </section>
 
       {/* Before vs After - Comparison Section */}
-      <section className="py-48 px-4 relative">
+      <section className="landing-section py-48 px-4 relative">
         <div className="mx-auto max-w-7xl">
           <div className="text-center mb-32">
             <h2 className="font-display text-5xl md:text-7xl font-black text-white mb-8 tracking-tighter uppercase">The Privacy Upgrade</h2>
@@ -431,7 +487,7 @@ function LandingPage({ onStart, onHowItWorks }: { onStart: () => void, onHowItWo
       </section>
 
       {/* Scale of Privacy - Circular Stats Section */}
-      <section className="py-48 px-4 relative overflow-hidden">
+      <section className="landing-section py-48 px-4 relative overflow-hidden">
         <div className="mx-auto max-w-7xl">
           <div className="flex flex-col lg:flex-row items-center gap-32">
             <div className="lg:w-1/2">
@@ -514,7 +570,7 @@ function LandingPage({ onStart, onHowItWorks }: { onStart: () => void, onHowItWo
       </section>
 
       {/* Shadow SDK - Code Snippet Section */}
-      <section className="py-48 px-4 relative bg-bg-void">
+      <section className="landing-section py-48 px-4 relative bg-bg-void">
         <div className="mx-auto max-w-7xl">
           <div className="flex flex-col lg:flex-row gap-24 items-center">
             <div className="lg:w-1/2">
@@ -595,7 +651,7 @@ function LandingPage({ onStart, onHowItWorks }: { onStart: () => void, onHowItWo
       </section>
 
       {/* Problem Section - Editorial Style */}
-      <section className="py-48 px-4 relative overflow-hidden">
+      <section className="landing-section py-48 px-4 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-500/20 to-transparent" />
         <div className="mx-auto max-w-7xl">
           <div className="flex flex-col lg:flex-row gap-24 items-center">
@@ -696,7 +752,7 @@ function LandingPage({ onStart, onHowItWorks }: { onStart: () => void, onHowItWo
       </section>
 
       {/* Solution Section - Immersive */}
-      <section className="py-48 px-4 relative overflow-hidden bg-bg-deep">
+      <section className="landing-section py-48 px-4 relative overflow-hidden bg-bg-deep">
         <div className="absolute inset-0 opacity-40">
           <ThreeScene type="vault" opacity={0.6} />
         </div>
@@ -758,7 +814,7 @@ function LandingPage({ onStart, onHowItWorks }: { onStart: () => void, onHowItWo
       </section>
 
       {/* The Dark Pool - Interactive Matching Visualization */}
-      <section className="py-48 px-4 relative overflow-hidden">
+      <section className="landing-section py-48 px-4 relative overflow-hidden">
         <div className="absolute inset-0 z-0">
           <ThreeScene type="matching" opacity={0.5} />
         </div>
@@ -1215,3 +1271,4 @@ function TradePage({ revealedItems, onToggleReveal }: {
     </motion.div>
   );
 }
+

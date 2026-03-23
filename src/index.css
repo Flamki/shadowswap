@@ -31,6 +31,10 @@
 }
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply bg-bg-void text-text-2 font-sans antialiased overflow-x-hidden selection:bg-teal-500/30;
     background-image: 
@@ -111,6 +115,11 @@
   .text-gradient {
     @apply text-transparent bg-clip-text bg-gradient-to-br from-white via-white to-white/40;
   }
+
+  .landing-section {
+    content-visibility: auto;
+    contain-intrinsic-size: 900px;
+  }
 }
 
 @keyframes shimmer {
@@ -155,3 +164,14 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
   background: rgba(255, 255, 255, 0.1);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
