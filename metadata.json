@@ -1,0 +1,5 @@
+{
+  "name": "ShadowSwap",
+  "description": "The first dark pool DEX using FHE encryption on-chain. Trade without a trace with institutional-grade cryptographic precision.",
+  "requestFramePermissions": []
+}
