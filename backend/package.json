@@ -1,0 +1,31 @@
+{
+  "name": "shadowswap-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ShadowSwap backend: smart contracts, keeper, tests, and deployment scripts.",
+  "scripts": {
+    "compile": "hardhat compile",
+    "clean": "hardhat clean",
+    "test": "hardhat test",
+    "coverage": "hardhat coverage",
+    "node": "hardhat node",
+    "deploy:arb-sepolia": "hardhat run scripts/deploy.ts --network arbitrumSepolia",
+    "verify:arb-sepolia": "hardhat run scripts/verify.ts --network arbitrumSepolia",
+    "keeper": "tsx keeper/src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@types/node": "^22.14.0",
+    "dotenv": "^16.4.7",
+    "hardhat": "^2.24.3",
+    "solidity-coverage": "^0.8.12",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.8.2"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.2.0",
+    "ethers": "^6.13.4"
+  }
+}

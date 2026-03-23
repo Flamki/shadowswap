@@ -44,3 +44,20 @@ Prerequisites: Node.js 20+ and npm.
 Vercel build settings used by this repo:
 - Build command: `npm run build`
 - Output directory: `dist`
+
+## Backend Module
+
+A complete backend implementation is included under [backend](C:/Users/bbook/Desktop/shadowswap/backend):
+
+- Smart contracts (`ShadowOrderBook`, `ShadowVault`, `ShadowSettlement`)
+- Hardhat tests (unit + integration)
+- Deployment and verification scripts
+- Keeper services (`matchingKeeper`, `settlementWatcher`)
+
+Backend quick start:
+
+1. `cd backend`
+2. `npm install`
+3. `cp .env.example .env`
+4. `npm run compile`
+5. `npm run test`
